@@ -1,0 +1,7 @@
+{
+  "tasks": {
+    "build": "No build commands are necessary for this repository.",
+    "test": "echo \"No testing information available.\"",
+    "launch": "open index.html"
+  }
+}

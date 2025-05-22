@@ -1,0 +1,725 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DevSydekik - AI Coding Assistant</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.10.377/pdf.min.js"></script>
+    <script>
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.10.377/pdf.worker.min.js';
+    </script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #111827; /* Dark background */
+            color: #e5e7eb; /* Light text */
+        }
+        #chatContainer::-webkit-scrollbar, #codePasteInput::-webkit-scrollbar, .playground-textarea::-webkit-scrollbar {
+            width: 8px;
+        }
+        #chatContainer::-webkit-scrollbar-track, #codePasteInput::-webkit-scrollbar-track, .playground-textarea::-webkit-scrollbar-track {
+            background: #1f2937;
+            border-radius: 10px;
+        }
+        #chatContainer::-webkit-scrollbar-thumb, #codePasteInput::-webkit-scrollbar-thumb, .playground-textarea::-webkit-scrollbar-thumb {
+            background: #4b5563;
+            border-radius: 10px;
+        }
+        #chatContainer::-webkit-scrollbar-thumb:hover, #codePasteInput::-webkit-scrollbar-thumb:hover, .playground-textarea::-webkit-scrollbar-thumb:hover {
+            background: #6b7280;
+        }
+        .message {
+            max-width: 90%;
+            word-wrap: break-word;
+        }
+        .user-message {
+            background-color: #3b82f6;
+            color: white;
+            align-self: flex-end;
+        }
+        .bot-message {
+            background-color: #374151;
+            color: #e5e7eb;
+            align-self: flex-start;
+        }
+        .bot-message pre {
+            position: relative;
+            background-color: #0d1117 !important;
+            color: #c9d1d9 !important;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            overflow-x: auto;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 0.875rem;
+        }
+        .bot-message pre code.hljs {
+            background: none !important;
+            padding: 0;
+        }
+        .bot-message code:not(pre code) {
+            background-color: #4b5563;
+            color: #e5e7eb;
+            padding: 0.125rem 0.25rem;
+            border-radius: 0.25rem;
+            font-family: 'Courier New', Courier, monospace;
+        }
+        .copy-code-btn {
+            position: absolute;
+            top: 0.5rem;
+            right: 0.5rem;
+            background-color: #4b5563;
+            color: #e5e7eb;
+            border: none;
+            padding: 0.25rem 0.5rem;
+            border-radius: 0.25rem;
+            font-size: 0.75rem;
+            cursor: pointer;
+            opacity: 0.7;
+            transition: opacity 0.2s;
+        }
+        .bot-message pre:hover .copy-code-btn {
+            opacity: 1;
+        }
+        .loading-dots span { animation: blink 1.4s infinite both; }
+        .loading-dots span:nth-child(2) { animation-delay: 0.2s; }
+        .loading-dots span:nth-child(3) { animation-delay: 0.4s; }
+        @keyframes blink { 0%, 80%, 100% { opacity: 0; } 40% { opacity: 1; } }
+
+        .modal { display: none; position: fixed; z-index: 100; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.6); display: flex; align-items: center; justify-content: center; }
+        .modal-content { background-color: #1f2937; padding: 20px; border: 1px solid #4b5563; border-radius: 8px; color: #e5e7eb; width: 90%; }
+        .code-paste-modal-content { max-width: 700px; }
+        .playground-modal-content { max-width: 95%; width: 95%; height: 90vh; display: flex; flex-direction: column; } 
+        .pricing-modal-content { max-width: 800px; }
+        .close-modal-btn { color: #aaa; float: right; font-size: 28px; font-weight: bold; cursor: pointer; }
+        .close-modal-btn:hover, .close-modal-btn:focus { color: #fff; text-decoration: none; }
+        .quick-prompt-btn {
+            background-color: #374151;
+            border: 1px solid #4b5563;
+            color: #9ca3af;
+            transition: all 0.2s;
+        }
+        .quick-prompt-btn:hover {
+            background-color: #4b5563;
+            color: #e5e7eb;
+        }
+        .playground-textarea {
+            font-family: 'Courier New', Courier, monospace;
+            background-color: #0d1117;
+            color: #c9d1d9;
+            border: 1px solid #4b5563;
+            border-radius: 0.375rem; 
+            padding: 0.5rem;
+            outline: none;
+            height: 150px; 
+        }
+        .playground-textarea:focus {
+            border-color: #3b82f6; 
+            box-shadow: 0 0 0 2px #3b82f680; 
+        }
+        #previewFrame {
+            border: 1px solid #4b5563;
+            border-radius: 0.375rem;
+            background-color: white; 
+        }
+        .plan-card {
+            background-color: #2d3748; /* Slightly lighter than modal bg */
+            border: 1px solid #4a5568;
+        }
+    </style>
+</head>
+<body class="flex flex-col items-center justify-center min-h-screen p-2 md:p-4">
+
+    <div class="w-full max-w-3xl bg-gray-800 shadow-2xl rounded-lg flex flex-col h-[95vh] md:h-[90vh]">
+        <header class="bg-gray-900 p-4 rounded-t-lg flex justify-between items-center">
+            <div class="flex items-center space-x-3">
+                <h1 class="text-xl md:text-2xl font-bold text-blue-400">DevSydekik</h1>
+                <button id="myAccountButton" title="My Account / Pricing" class="p-1.5 text-gray-400 hover:text-yellow-400 transition-colors duration-150 rounded-full focus:outline-none focus:ring-2 focus:ring-yellow-500">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 md:h-6 md:w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                    </svg>
+                </button>
+            </div>
+            <button id="clearChatButton" title="Clear Chat" class="p-2 text-gray-400 hover:text-red-400 transition-colors duration-150 rounded-full focus:outline-none focus:ring-2 focus:ring-red-500">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 md:h-6 md:w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+            </button>
+        </header>
+
+        <div id="chatContainer" class="flex-grow p-3 md:p-6 space-y-4 overflow-y-auto">
+            </div>
+        
+        <div id="usageStatusContainer" class="px-3 md:px-6 py-2 text-sm border-t border-b border-gray-700 space-y-1">
+            <div id="pdfStatus" class="text-blue-300 hidden">
+                PDF Loaded: <span id="pdfName" class="font-semibold"></span> (<span id="pdfPageCount"></span> pages). <button id="clearPdfContext" class="text-red-400 hover:text-red-300 text-xs ml-2">[Clear PDF]</button>
+            </div>
+            <div id="codeContextStatus" class="text-green-300 hidden">
+                Code snippet loaded for context. <button id="clearCodeContext" class="text-red-400 hover:text-red-300 text-xs ml-2">[Clear Code]</button>
+            </div>
+            <div id="freeTierUsageStatus" class="text-yellow-400">
+                Free Tier: <span id="questionsAsked" class="font-semibold">0</span> of <span id="maxQuestions" class="font-semibold">2</span> questions asked today.
+            </div>
+        </div>
+        
+        <div id="errorMessage" class="px-3 md:px-6 py-2 text-sm text-red-400 bg-red-900 hidden"></div>
+
+        <footer class="bg-gray-900 p-3 md:p-4 rounded-b-lg border-t border-gray-700">
+            <div id="quickPromptsContainer" class="mb-2 flex flex-wrap gap-2 justify-center">
+                </div>
+            <div class="flex items-center space-x-1 md:space-x-2">
+                <input type="file" id="pdfUpload" accept=".pdf" class="hidden">
+                <button id="uploadButton" title="Upload PDF for Context" class="p-2 text-gray-400 hover:text-blue-400 transition-colors duration-150 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 md:h-6 md:w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
+                </button>
+                <button id="pasteCodeButton" title="Paste Code for Context" class="p-2 text-gray-400 hover:text-green-400 transition-colors duration-150 rounded-full focus:outline-none focus:ring-2 focus:ring-green-500">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 md:h-6 md:w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                </button>
+                <button id="playgroundButton" title="Open Code Playground" class="p-2 text-gray-400 hover:text-purple-400 transition-colors duration-150 rounded-full focus:outline-none focus:ring-2 focus:ring-purple-500">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 md:h-6 md:w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
+                    </svg>
+                </button>
+                <input type="text" id="userInput" class="flex-grow p-3 bg-gray-700 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none placeholder-gray-500 text-sm md:text-base" placeholder="Ask a coding question...">
+                <button id="sendButton" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-3 md:px-5 rounded-lg shadow-md transition duration-150 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50 text-sm md:text-base">
+                    Send
+                </button>
+            </div>
+        </footer>
+    </div>
+
+    <div id="codePasteModal" class="modal">
+        <div class="modal-content code-paste-modal-content">
+            <span id="closeCodeModalBtn" class="close-modal-btn">&times;</span>
+            <h2 class="text-xl font-semibold mb-4">Paste Code for Context</h2>
+            <p class="text-sm text-gray-400 mb-2">Paste your code snippet below. Sydekik will use this as context for your questions.</p>
+            <textarea id="codePasteInput" rows="15" class="w-full p-2 bg-gray-700 border border-gray-600 rounded-md outline-none focus:ring-2 focus:ring-green-500 placeholder-gray-500 text-sm" placeholder="Paste your code here..."></textarea>
+            <div class="mt-4 flex justify-end space-x-3">
+                <button id="cancelCodePaste" class="px-4 py-2 text-sm font-medium text-gray-300 bg-gray-600 hover:bg-gray-500 rounded-md">Cancel</button>
+                <button id="submitCodePaste" class="px-4 py-2 text-sm font-medium text-white bg-green-600 hover:bg-green-700 rounded-md">Add Code Context</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="playgroundModal" class="modal">
+        <div class="modal-content playground-modal-content">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-xl font-semibold">Code Playground</h2>
+                <span id="closePlaygroundModalBtn" class="close-modal-btn">&times;</span>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 flex-grow min-h-0">
+                <div class="flex flex-col space-y-2 min-h-0">
+                    <div>
+                        <label for="htmlCode" class="block text-sm font-medium text-gray-300 mb-1">HTML</label>
+                        <textarea id="htmlCode" class="playground-textarea w-full" placeholder=""></textarea>
+                    </div>
+                    <div>
+                        <label for="cssCode" class="block text-sm font-medium text-gray-300 mb-1">CSS</label>
+                        <textarea id="cssCode" class="playground-textarea w-full" placeholder="/* CSS code here */"></textarea>
+                    </div>
+                    <div>
+                        <label for="jsCode" class="block text-sm font-medium text-gray-300 mb-1">JavaScript</label>
+                        <textarea id="jsCode" class="playground-textarea w-full" placeholder="// JavaScript code here"></textarea>
+                    </div>
+                </div>
+                <div class="flex flex-col min-h-0">
+                    <label class="block text-sm font-medium text-gray-300 mb-1">Live Preview</label>
+                    <iframe id="previewFrame" class="w-full h-full flex-grow" sandbox="allow-scripts allow-same-origin"></iframe>
+                </div>
+            </div>
+            <div class="mt-4 flex justify-end">
+                <button id="runPreviewButton" class="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md">Run Preview</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="pricingModal" class="modal">
+        <div class="modal-content pricing-modal-content">
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-2xl font-semibold">Sydekik Plans & Account</h2>
+                <span id="closePricingModalBtn" class="close-modal-btn">&times;</span>
+            </div>
+
+            <div id="accountSection" class="mb-8 p-4 bg-gray-700 rounded-lg">
+                <h3 class="text-lg font-semibold mb-2 text-yellow-400">My Account (Placeholder)</h3>
+                <p class="text-sm">You are currently on the: <strong id="currentUserPlan" class="text-green-400">Free Tier</strong></p>
+                <p class="text-sm">Questions used today: <strong id="userQuestionsUsed" class="text-green-400">0 / 2</strong></p>
+                <button class="mt-2 text-xs bg-red-500 hover:bg-red-600 text-white py-1 px-2 rounded">Logout (Placeholder)</button>
+            </div>
+
+            <h3 class="text-xl font-semibold mb-4 text-center">Choose Your Plan</h3>
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div class="plan-card p-4 rounded-lg flex flex-col justify-between">
+                    <div>
+                        <h4 class="text-lg font-bold text-gray-100">Free Tier</h4>
+                        <p class="text-2xl font-extrabold my-2">$0<span class="text-sm font-normal text-gray-400">/month</span></p>
+                        <ul class="text-xs text-gray-300 space-y-1 mb-3">
+                            <li>✓ 2 Questions/Day (High Quality)</li>
+                            <li>✓ PDF/Code Context</li>
+                            <li>✓ Code Playground</li>
+                        </ul>
+                    </div>
+                    <button class="w-full bg-gray-500 text-white py-2 rounded-md text-sm font-medium cursor-not-allowed" disabled>Current Plan</button>
+                </div>
+                <div class="plan-card p-4 rounded-lg flex flex-col justify-between">
+                    <div>
+                        <h4 class="text-lg font-bold text-blue-400">Developer Kickstart</h4>
+                        <p class="text-2xl font-extrabold my-2">$9.99<span class="text-sm font-normal text-gray-400">/month</span></p>
+                        <ul class="text-xs text-gray-300 space-y-1 mb-3">
+                            <li>✓ 100 Questions/Month</li>
+                            <li>✓ All Free Features</li>
+                            <li>✓ Priority Support (Conceptual)</li>
+                        </ul>
+                    </div>
+                    <button class="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-md text-sm font-medium subscribe-btn" data-plan="kickstart">Subscribe</button>
+                </div>
+                <div class="plan-card p-4 rounded-lg flex flex-col justify-between">
+                    <div>
+                        <h4 class="text-lg font-bold text-green-400">Pro Power</h4>
+                        <p class="text-2xl font-extrabold my-2">$19.99<span class="text-sm font-normal text-gray-400">/month</span></p>
+                        <ul class="text-xs text-gray-300 space-y-1 mb-3">
+                            <li>✓ 500 Questions/Month</li>
+                            <li>✓ All Kickstart Features</li>
+                            <li>✓ Beta Feature Access (Conceptual)</li>
+                        </ul>
+                    </div>
+                    <button class="w-full bg-green-600 hover:bg-green-700 text-white py-2 rounded-md text-sm font-medium subscribe-btn" data-plan="pro">Subscribe</button>
+                </div>
+                <div class="plan-card p-4 rounded-lg flex flex-col justify-between">
+                    <div>
+                        <h4 class="text-lg font-bold text-purple-400">Sydekik Unlimited</h4>
+                        <p class="text-2xl font-extrabold my-2">$60<span class="text-sm font-normal text-gray-400">/month</span></p>
+                        <ul class="text-xs text-gray-300 space-y-1 mb-3">
+                            <li>✓ Unlimited Questions*</li>
+                            <li>✓ All Pro Features</li>
+                            <li>✓ Top Priority Support (Conceptual)</li>
+                        </ul>
+                    </div>
+                    <button class="w-full bg-purple-600 hover:bg-purple-700 text-white py-2 rounded-md text-sm font-medium subscribe-btn" data-plan="unlimited_monthly">Subscribe</button>
+                </div>
+            </div>
+             <div class="mt-6 text-center">
+                <div class="plan-card p-4 rounded-lg inline-block">
+                    <h4 class="text-lg font-bold text-yellow-400">Lifetime Dev Partner</h4>
+                    <p class="text-2xl font-extrabold my-2">$599.99<span class="text-sm font-normal text-gray-400"> (One-Time)</span></p>
+                    <ul class="text-xs text-gray-300 space-y-1 mb-3">
+                        <li>✓ Unlimited Questions* (Lifetime)</li>
+                        <li>✓ All Pro Features</li>
+                    </ul>
+                    <button class="w-full bg-yellow-500 hover:bg-yellow-600 text-gray-900 py-2 rounded-md text-sm font-medium subscribe-btn" data-plan="lifetime">Buy Lifetime Access</button>
+                    <p class="text-xs text-gray-500 mt-1">*Fair use policy applies</p>
+                </div>
+            </div>
+            <p class="text-xs text-gray-500 mt-6 text-center">Payments are processed securely. This is a UI placeholder; actual payment integration requires a backend.</p>
+        </div>
+    </div>
+
+
+    <script>
+        // Existing DOM Elements
+        const chatContainer = document.getElementById('chatContainer');
+        const userInput = document.getElementById('userInput');
+        const sendButton = document.getElementById('sendButton');
+        const clearChatButton = document.getElementById('clearChatButton');
+        
+        const pdfUpload = document.getElementById('pdfUpload');
+        const uploadButton = document.getElementById('uploadButton');
+        const pdfStatusDiv = document.getElementById('pdfStatus');
+        const pdfNameSpan = document.getElementById('pdfName');
+        const pdfPageCountSpan = document.getElementById('pdfPageCount');
+        const clearPdfContextBtn = document.getElementById('clearPdfContext');
+
+        const pasteCodeButton = document.getElementById('pasteCodeButton');
+        const codePasteModal = document.getElementById('codePasteModal');
+        const closeCodeModalBtn = document.getElementById('closeCodeModalBtn');
+        const codePasteInput = document.getElementById('codePasteInput');
+        const cancelCodePaste = document.getElementById('cancelCodePaste');
+        const submitCodePaste = document.getElementById('submitCodePaste');
+        const codeContextStatusDiv = document.getElementById('codeContextStatus');
+        const clearCodeContextBtn = document.getElementById('clearCodeContext');
+        
+        const playgroundButton = document.getElementById('playgroundButton');
+        const playgroundModal = document.getElementById('playgroundModal');
+        const closePlaygroundModalBtn = document.getElementById('closePlaygroundModalBtn');
+        const htmlCodeInput = document.getElementById('htmlCode');
+        const cssCodeInput = document.getElementById('cssCode');
+        const jsCodeInput = document.getElementById('jsCode');
+        const previewFrame = document.getElementById('previewFrame');
+        const runPreviewButton = document.getElementById('runPreviewButton');
+
+        const errorMessageDiv = document.getElementById('errorMessage');
+        const quickPromptsContainer = document.getElementById('quickPromptsContainer');
+
+        // New SaaS UI Placeholder Elements
+        const myAccountButton = document.getElementById('myAccountButton');
+        const pricingModal = document.getElementById('pricingModal');
+        const closePricingModalBtn = document.getElementById('closePricingModalBtn');
+        const freeTierUsageStatusDiv = document.getElementById('freeTierUsageStatus');
+        const questionsAskedSpan = document.getElementById('questionsAsked');
+        const maxQuestionsSpan = document.getElementById('maxQuestions'); // For display
+        // Placeholder account details in pricing modal
+        const currentUserPlanSpan = document.getElementById('currentUserPlan');
+        const userQuestionsUsedSpan = document.getElementById('userQuestionsUsed');
+
+
+        // App State
+        let pdfTextContext = ""; 
+        let codeTextContext = "";
+        const initialBotGreeting = "Hello! I'm DevSydekik. Ask coding questions, upload a PDF, paste code for analysis, or try the Code Playground. While I can't connect to your local environment, I can generate commands, explain errors, and help with code!";
+        const examplePrompts = [
+            "Explain JavaScript closures.",
+            "How do I create a virtual environment in Python?",
+            "My CSS isn't applying, what should I check?",
+            "Generate a simple HTML boilerplate."
+        ];
+        let questionsAskedToday = 0;
+        const MAX_FREE_QUESTIONS = 2;
+        maxQuestionsSpan.textContent = MAX_FREE_QUESTIONS; // Update display
+
+        // --- Initialization ---
+        function initializeApp() {
+            displayMessage(initialBotGreeting, "bot");
+            renderQuickPrompts();
+            updateUsageDisplay();
+        }
+
+        function renderQuickPrompts() {
+            quickPromptsContainer.innerHTML = ''; 
+            examplePrompts.forEach(promptText => {
+                const button = document.createElement('button');
+                button.classList.add('quick-prompt-btn', 'px-3', 'py-1', 'rounded-md', 'text-xs');
+                button.textContent = promptText;
+                button.onclick = () => {
+                    userInput.value = promptText;
+                    userInput.focus();
+                };
+                quickPromptsContainer.appendChild(button);
+            });
+        }
+
+        function updateUsageDisplay() {
+            questionsAskedSpan.textContent = questionsAskedToday;
+            userQuestionsUsedSpan.textContent = `${questionsAskedToday} / ${MAX_FREE_QUESTIONS}`; // Update in modal too
+            if (questionsAskedToday >= MAX_FREE_QUESTIONS) {
+                freeTierUsageStatusDiv.innerHTML = `Free Tier: <strong class="text-red-400">Daily limit reached (${MAX_FREE_QUESTIONS}/${MAX_FREE_QUESTIONS}).</strong> <button id="upgradeNowBtn" class="text-yellow-400 hover:text-yellow-300 underline ml-1 text-xs">Upgrade Now?</button>`;
+                userInput.disabled = true;
+                sendButton.disabled = true;
+                userInput.placeholder = "Daily free limit reached. Upgrade for more.";
+                document.getElementById('upgradeNowBtn')?.addEventListener('click', () => pricingModal.style.display = 'flex');
+            } else {
+                freeTierUsageStatusDiv.innerHTML = `Free Tier: <span id="questionsAsked" class="font-semibold">${questionsAskedToday}</span> of <span id="maxQuestions" class="font-semibold">${MAX_FREE_QUESTIONS}</span> questions asked today.`;
+                userInput.disabled = false;
+                sendButton.disabled = false;
+                userInput.placeholder = "Ask a coding question...";
+            }
+        }
+
+
+        // --- Event Listeners ---
+        sendButton.addEventListener('click', sendMessage);
+        userInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') sendMessage(); });
+        
+        clearChatButton.addEventListener('click', () => {
+            chatContainer.innerHTML = ''; 
+            // questionsAskedToday = 0; // Resetting for demo purposes, real app would persist this daily
+            initializeApp(); 
+            displayMessage("Chat cleared.", "bot"); 
+        });
+
+        uploadButton.addEventListener('click', () => pdfUpload.click());
+        pdfUpload.addEventListener('change', handlePdfUpload);
+        clearPdfContextBtn.addEventListener('click', () => {
+            pdfTextContext = "";
+            pdfStatusDiv.classList.add('hidden');
+            pdfUpload.value = "";
+            displayMessage("PDF context cleared.", "bot");
+        });
+
+        pasteCodeButton.addEventListener('click', () => { codePasteModal.style.display = 'flex'; codePasteInput.focus(); });
+        closeCodeModalBtn.addEventListener('click', () => { codePasteModal.style.display = 'none'; });
+        cancelCodePaste.addEventListener('click', () => { codePasteModal.style.display = 'none'; });
+        window.addEventListener('click', (event) => { if (event.target == codePasteModal) codePasteModal.style.display = 'none'; });
+        
+        submitCodePaste.addEventListener('click', () => {
+            codeTextContext = codePasteInput.value.trim();
+            if (codeTextContext) {
+                codeContextStatusDiv.classList.remove('hidden');
+                displayMessage("Code snippet context loaded. You can now ask questions about it.", "bot");
+            } else {
+                codeContextStatusDiv.classList.add('hidden');
+            }
+            codePasteModal.style.display = 'none';
+        });
+        clearCodeContextBtn.addEventListener('click', () => {
+            codeTextContext = "";
+            codePasteInput.value = "";
+            codeContextStatusDiv.classList.add('hidden');
+            displayMessage("Pasted code context cleared.", "bot");
+        });
+
+        playgroundButton.addEventListener('click', () => { playgroundModal.style.display = 'flex'; });
+        closePlaygroundModalBtn.addEventListener('click', () => { playgroundModal.style.display = 'none'; });
+        window.addEventListener('click', (event) => { if (event.target == playgroundModal) playgroundModal.style.display = 'none'; });
+        runPreviewButton.addEventListener('click', updatePreview);
+
+        // Pricing Modal Listeners
+        myAccountButton.addEventListener('click', () => { pricingModal.style.display = 'flex'; });
+        closePricingModalBtn.addEventListener('click', () => { pricingModal.style.display = 'none'; });
+        window.addEventListener('click', (event) => { if (event.target == pricingModal) pricingModal.style.display = 'none'; });
+        
+        document.querySelectorAll('.subscribe-btn').forEach(button => {
+            button.addEventListener('click', (e) => {
+                const plan = e.target.dataset.plan;
+                alert(`Placeholder: You clicked to subscribe to the "${plan}" plan. Real payment integration needed!`);
+                // In a real app, this would initiate the payment flow with a backend.
+                pricingModal.style.display = 'none';
+            });
+        });
+
+
+        // --- Message Handling ---
+        function displayMessage(text, sender) {
+            const messageDiv = document.createElement('div');
+            messageDiv.classList.add('message', 'p-3', 'rounded-lg', 'shadow', sender === 'user' ? 'user-message' : 'bot-message');
+            
+            if (sender === 'bot') {
+                let htmlContent = text;
+                htmlContent = htmlContent.replace(/```(\w*\n)?([\s\S]*?)```/g, (match, lang, code) => {
+                    const language = lang ? lang.trim() : '';
+                    const escapedCode = code.replace(/</g, "&lt;").replace(/>/g, "&gt;").trim();
+                    const langClass = language ? `language-${language}` : '';
+                    return `<pre class="${langClass}"><button class="copy-code-btn">Copy</button><code>${escapedCode}</code></pre>`;
+                });
+                htmlContent = htmlContent.replace(/`([^`]+)`/g, (match, code) => {
+                    const escapedCode = code.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+                    return `<code>${escapedCode}</code>`;
+                });
+                htmlContent = htmlContent.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+                htmlContent = htmlContent.replace(/\*(.*?)\*/g, '<em>$1</em>');
+                htmlContent = htmlContent.replace(/\n/g, '<br>');
+                htmlContent = htmlContent.replace(/<pre(.*?)>(.*?)<\/pre>/gs, (match, preAttrs, preContent) => {
+                    return `<pre${preAttrs}>${preContent.replace(/<br\s*\/?>/gi, '\n')}</pre>`;
+                });
+                messageDiv.innerHTML = htmlContent;
+                
+                messageDiv.querySelectorAll('pre code').forEach((block) => { hljs.highlightElement(block); });
+                messageDiv.querySelectorAll('.copy-code-btn').forEach(button => {
+                    button.addEventListener('click', (e) => {
+                        const codeElement = e.target.nextElementSibling;
+                        const codeToCopy = codeElement.textContent;
+                        navigator.clipboard.writeText(codeToCopy).then(() => {
+                            e.target.textContent = 'Copied!';
+                            setTimeout(() => { e.target.textContent = 'Copy'; }, 2000);
+                        }).catch(err => {
+                            console.error('Failed to copy code: ', err);
+                            const textArea = document.createElement("textarea");
+                            textArea.value = codeToCopy;
+                            document.body.appendChild(textArea);
+                            textArea.focus(); textArea.select();
+                            try {
+                                document.execCommand('copy');
+                                e.target.textContent = 'Copied!';
+                                setTimeout(() => { e.target.textContent = 'Copy'; }, 2000);
+                            } catch (execErr) {
+                                console.error('Fallback copy failed: ', execErr);
+                                e.target.textContent = 'Error';
+                            }
+                            document.body.removeChild(textArea);
+                        });
+                    });
+                });
+            } else {
+                messageDiv.textContent = text;
+            }
+            chatContainer.appendChild(messageDiv);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+
+        function showLoadingIndicator() { 
+            const loadingDiv = document.createElement('div');
+            loadingDiv.id = 'loadingIndicator';
+            loadingDiv.classList.add('message', 'bot-message', 'p-3', 'rounded-lg', 'shadow', 'flex', 'items-center');
+            loadingDiv.innerHTML = `<div class="loading-dots"><span>.</span><span>.</span><span>.</span></div><span class="ml-2 text-sm">DevSydekik is thinking...</span>`;
+            chatContainer.appendChild(loadingDiv);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+        function removeLoadingIndicator() { 
+            const loadingIndicator = document.getElementById('loadingIndicator');
+            if (loadingIndicator) loadingIndicator.remove();
+        }
+        function displayError(message) { 
+            errorMessageDiv.textContent = message;
+            errorMessageDiv.classList.remove('hidden');
+            setTimeout(() => { errorMessageDiv.classList.add('hidden'); errorMessageDiv.textContent = ''; }, 7000);
+        }
+
+        async function sendMessage() {
+            if (questionsAskedToday >= MAX_FREE_QUESTIONS) {
+                displayError("You've reached your daily free question limit. Please upgrade for more.");
+                pricingModal.style.display = 'flex'; // Show pricing modal
+                return;
+            }
+
+            const messageText = userInput.value.trim();
+            if (!messageText) return;
+
+            displayMessage(messageText, 'user');
+            userInput.value = '';
+            showLoadingIndicator();
+            errorMessageDiv.classList.add('hidden');
+
+            // Increment question count for free tier (simulated)
+            questionsAskedToday++;
+            updateUsageDisplay();
+
+
+            try {
+                // AI Prompt (same as v5, no changes needed here for this UI update)
+                let prompt = `You are DevSydekik, an expert AI coding assistant for beginner to advanced developers. 
+                Your primary goal is to provide clear, concise, and accurate answers to coding questions. 
+                Explain concepts simply. Provide well-formatted code examples using Markdown code blocks.
+                
+                If the user provides code, analyze it: explain what it does, identify potential issues (syntax, logic, style, security), and suggest improvements or refactoring options.
+                If the user asks a vague question about their code not working (e.g., "My code is broken", "It doesn't run"), DO NOT just say you need more info. INSTEAD, guide them by asking specific clarifying questions, such as:
+                - "Okay, I can try to help! Could you please paste the code snippet that's causing trouble?"
+                - "What error message are you seeing, if any? Please share the full error."
+                - "What were you expecting the code to do, and what is it actually doing?"
+                - "Which programming language and version are you using?"
+                Be proactive in guiding them to provide the necessary details for you to help effectively.
+
+                IMPORTANT ON TERMINAL/IDE: You CANNOT directly connect to or control a user's local terminal or IDE. 
+                If the user asks about direct terminal/IDE interaction, clearly explain this limitation due to web browser security. 
+                Instead, offer to help by:
+                1. Generating terminal commands for them to copy and paste.
+                2. Explaining terminal output or error messages if they paste them to you.
+                3. Generating code snippets for them to use in their IDE (they can also try these in the 'Code Playground' feature of this app).
+                4. Explaining IDE features or debugging strategies if they describe their problem or paste relevant error messages/code.
+                Encourage them to provide the necessary information.
+
+                FORMATTING:
+                - Use Markdown for all formatting.
+                - For code blocks, use triple backticks. Specify the language if known (e.g., \`\`\`python ... \`\`\`).
+                - Use bold (\`**text**\`) and italics (\`*text*\`) for emphasis.
+                - Use lists (\`-\` or \`*\` or \`1.\`) for enumerations.
+
+                CONTEXT: If context from a PDF document or a pasted code snippet is provided below, use it to enhance your answer and make it more relevant. Explicitly mention if you are using the provided document or code context.`;
+
+                if (pdfTextContext) {
+                    prompt += `\n\n--- Provided PDF Document Context Start ---\n${pdfTextContext}\n--- Provided PDF Document Context End ---`;
+                }
+                if (codeTextContext) {
+                    prompt += `\n\n--- Provided Code Snippet Context Start ---\n${codeTextContext}\n--- Provided Code Snippet Context End ---`;
+                }
+                prompt += `\n\nUser Question: ${messageText}`;
+                
+                let chatHistory = []; 
+                chatHistory.push({ role: "user", parts: [{ text: prompt }] });
+                const payload = { contents: chatHistory };
+                const apiKey = ""; 
+                const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                removeLoadingIndicator();
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    console.error('API Error:', errorData);
+                    displayError(`Error from AI: ${errorData.error?.message || 'Unknown error'}. Status: ${response.status}`);
+                    displayMessage(`Sorry, I encountered an error trying to respond. (Status: ${response.status})`, 'bot');
+                    // Do not decrement questionsAskedToday on API error, as the "usage" still occurred.
+                    return;
+                }
+                const result = await response.json();
+
+                if (result.candidates && result.candidates.length > 0 &&
+                    result.candidates[0].content && result.candidates[0].content.parts &&
+                    result.candidates[0].content.parts.length > 0) {
+                    const botResponse = result.candidates[0].content.parts[0].text;
+                    displayMessage(botResponse, 'bot');
+                } else {
+                    console.error('Unexpected API response structure:', result);
+                    displayError('Received an unexpected response from the AI.');
+                    displayMessage("Sorry, I couldn't formulate a response properly.", 'bot');
+                }
+            } catch (error) {
+                removeLoadingIndicator();
+                console.error('Failed to send message:', error);
+                displayError(`Network or script error: ${error.message}`);
+                displayMessage("Oops! Something went wrong on my end. Please try again.", 'bot');
+            }
+        }
+
+        // --- PDF Handling ---
+        async function handlePdfUpload(event) { 
+            const file = event.target.files[0];
+            if (file && file.type === "application/pdf") {
+                pdfNameSpan.textContent = "Processing...";
+                pdfPageCountSpan.textContent = "";
+                pdfStatusDiv.classList.remove('hidden');
+                pdfTextContext = ""; 
+                try {
+                    const arrayBuffer = await file.arrayBuffer();
+                    const pdf = await pdfjsLib.getDocument({data: arrayBuffer}).promise;
+                    pdfNameSpan.textContent = file.name;
+                    pdfPageCountSpan.textContent = pdf.numPages;
+                    let fullText = "";
+                    for (let i = 1; i <= pdf.numPages; i++) {
+                        const page = await pdf.getPage(i);
+                        const textContent = await page.getTextContent();
+                        const pageText = textContent.items.map(item => item.str).join(" ");
+                        fullText += pageText + "\n\n"; 
+                        if (i % 5 === 0 || i === pdf.numPages) {
+                             pdfStatusDiv.querySelector('#pdfName').textContent = `${file.name} (Page ${i}/${pdf.numPages})...`;
+                        }
+                    }
+                    pdfTextContext = fullText.trim();
+                    pdfNameSpan.textContent = file.name;
+                    displayMessage(`Successfully loaded and processed "${file.name}". You can now ask questions related to its content.`, 'bot');
+                } catch (error) {
+                    console.error("Error processing PDF:", error);
+                    pdfTextContext = "";
+                    pdfNameSpan.textContent = `Error loading ${file.name}.`;
+                    pdfPageCountSpan.textContent = "";
+                    displayError(`Failed to process PDF: ${error.message}`);
+                }
+            } else if (file) {
+                displayError("Invalid file type. Please upload a PDF.");
+                pdfUpload.value = ""; 
+            }
+        }
+        
+        // --- Playground Logic ---
+        function updatePreview() {
+            const htmlContent = htmlCodeInput.value;
+            const cssContent = cssCodeInput.value;
+            const jsContent = jsCodeInput.value;
+
+            const combinedOutput = `
+                <html>
+                <head>
+                    <style>${cssContent}</style>
+                </head>
+                <body>
+                    ${htmlContent}
+                    <script>${jsContent}<\/script> 
+                </body>
+                </html>
+            `;
+            previewFrame.srcdoc = combinedOutput;
+        }
+
+        // Initialize App
+        hljs.configure({ ignoreUnescapedHTML: true });
+        initializeApp();
+
+    </script>
+</body>
+</html>
